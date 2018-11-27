@@ -1,4 +1,4 @@
-public class BTree
+public class LockBasedBTree
 {
 	// Order of the BTree
 	private int T;
@@ -24,7 +24,7 @@ public class BTree
 	}
 
 	// Constructor
-	public BTree(int T)
+	public LockBasedBTree(int T)
 	{
 		this.T = T;
 		root = new Node();
@@ -34,7 +34,7 @@ public class BTree
 
 
 
-	private Node Search (Node x, int key)
+	synchronized private Node Search (Node x, int key)
 	{
 		int i = 0;
 		if (x == null)
@@ -52,7 +52,7 @@ public class BTree
 			return Search(x.child[i],key);
 	}
 
-	public boolean Contain(int k)
+	synchronized public boolean Contain(int k)
 	{
 		if (this.Search(root, k) != null)
 			return true;
@@ -61,7 +61,7 @@ public class BTree
 	}
 
 
-	private void Split (Node x, int pos, Node y)
+	synchronized private void Split (Node x, int pos, Node y)
 	{
 		Node z = new Node();
 		z.leaf = y.leaf;
@@ -83,7 +83,7 @@ public class BTree
 		x.n = x.n + 1;
 	}
 
-	final private void RecursiveInsert (Node x , int k)
+	synchronized final private void RecursiveInsert (Node x , int k)
 	{
 		int i;
 		if (x.leaf)
@@ -108,7 +108,7 @@ public class BTree
 		}
 	}
 
-	public void Insert (final int key)
+	synchronized public void Insert (final int key)
 	{
 		Node r = root;
 		if (r.n == 2*T - 1 )
@@ -126,7 +126,7 @@ public class BTree
 	}
 
 
-	private void Show (Node x)
+	synchronized private void Show (Node x)
 	{
 		assert(x == null);
 		System.out.print(x.leaf + " " + x.n + ":" );
@@ -140,13 +140,13 @@ public class BTree
 		}
 	}
 
-	public void Show ()
+	synchronized public void Show ()
 	{
 		Show(root);
 	}
 
 
-	private void Remove (Node x , int key)
+	synchronized private void Remove (Node x , int key)
 	{
 		int pos = x.Find(key);
 		if (pos != -1)
@@ -347,7 +347,7 @@ public class BTree
 		}
 	}
 
-	public void Delete (int key)
+	synchronized public void Delete (int key)
 	{
 		Node x = Search(root, key);
 		if (x == null)

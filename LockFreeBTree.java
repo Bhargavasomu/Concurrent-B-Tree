@@ -1,8 +1,12 @@
-public class BTree
+import java.util.concurrent.Semaphore;
+
+public class LockFreeBTree
 {
 	// Order of the BTree
 	private int T;
 	private Node root;
+	private Semaphore rootLock;
+	private Semaphore childLock;
 
 	// BTree Node class
 	public class Node
@@ -24,18 +28,21 @@ public class BTree
 	}
 
 	// Constructor
-	public BTree(int T)
+	public LockFreeBTree(int T)
 	{
 		this.T = T;
 		root = new Node();
 		root.n = 0;
 		root.leaf = true;
+		rootLock = new Semaphore(1);
+		childLock = new Semaphore(this.T);
 	}
 
 
 
-	private Node Search (Node x, int key)
+	synchronized private Node Search (Node x, int key) throws InterruptedException
 	{
+		rootLock.acquire();
 		int i = 0;
 		if (x == null)
 			return x;
@@ -49,10 +56,15 @@ public class BTree
 		if (x.leaf)
 			return null;
 		else
+		{
+			childLock.acquire();
+			rootLock.release();
+			childLock.release();
 			return Search(x.child[i],key);
+		}
 	}
 
-	public boolean Contain(int k)
+	synchronized public boolean Contain(int k) throws InterruptedException
 	{
 		if (this.Search(root, k) != null)
 			return true;
@@ -61,8 +73,11 @@ public class BTree
 	}
 
 
-	private void Split (Node x, int pos, Node y)
+	synchronized private void Split (Node x, int pos, Node y) throws InterruptedException
 	{
+		rootLock.acquire();
+		childLock.acquire();
+		rootLock.release();
 		Node z = new Node();
 		z.leaf = y.leaf;
 		z.n = T - 1;
@@ -81,17 +96,22 @@ public class BTree
 			x.key[j+1] = x.key[j];
 		x.key[pos] = y.key[T-1];
 		x.n = x.n + 1;
+		childLock.release();
 	}
 
-	final private void RecursiveInsert (Node x , int k)
+	final synchronized private void RecursiveInsert (Node x , int k) throws InterruptedException
 	{
+		rootLock.acquire();
 		int i;
+		childLock.acquire();
+		rootLock.release();
 		if (x.leaf)
 		{
 			for (i = x.n-1 ; i >= 0 && k < x.key[i] ; i--)
 				x.key[i+1] = x.key[i];
 			x.key[i+1] = k;
 			x.n = x.n + 1;
+			childLock.release();
 		}
 		else
 		{
@@ -104,13 +124,19 @@ public class BTree
 				if ( k > x.key[i])
 					i++;
 			}
+			rootLock.notify();
+			childLock.notify();
 			RecursiveInsert(x.child[i], k);
+			rootLock.release();
+			childLock.release();
 		}
 	}
 
-	public void Insert (final int key)
+	synchronized public void Insert (final int key) throws InterruptedException
 	{
 		Node r = root;
+		rootLock.acquire();
+		childLock.acquire();
 		if (r.n == 2*T - 1 )
 		{
 			Node s = new Node();
@@ -123,10 +149,12 @@ public class BTree
 		}
 		else
 			RecursiveInsert(r,key);
+		childLock.release();
+		rootLock.release();
 	}
 
 
-	private void Show (Node x)
+	synchronized private void Show (Node x)
 	{
 		assert(x == null);
 		System.out.print(x.leaf + " " + x.n + ":" );
@@ -140,15 +168,18 @@ public class BTree
 		}
 	}
 
-	public void Show ()
+	synchronized public void Show ()
 	{
 		Show(root);
 	}
 
 
-	private void Remove (Node x , int key)
+	synchronized private void Remove (Node x , int key) throws InterruptedException
 	{
 		int pos = x.Find(key);
+		rootLock.acquire();
+		childLock.acquire();
+		rootLock.release();
 		if (pos != -1)
 		{
 			if (x.leaf)
@@ -159,6 +190,7 @@ public class BTree
 				{
 					if (i != 2*T - 2)
 						x.key[i] = x.key[i+1];
+					childLock.notify();
 				}
 				x.n--;
 				return;
@@ -167,6 +199,7 @@ public class BTree
 			{
 				Node pred = x.child[pos];
 				int predKey = 0;
+				childLock.tryAcquire();
 				if (pred.n >= T)
 				{
 					for (;;)
@@ -182,6 +215,7 @@ public class BTree
 					}
 					Remove (pred, predKey);
 					x.key[pos] = predKey;
+					childLock.release();
 					return;
 				}
 
@@ -227,7 +261,12 @@ public class BTree
 				for (int i = pos+1 ; i < x.n+1 ; i++)
 				{
 					if (i != 2*T - 1)
+					{
+						// Forcefully get the child lock
+						childLock.acquireUninterruptibly();
 						x.child[i] = x.child[i+1];
+						childLock.release();
+					}
 				}
 				x.n--;
 				if (x.n == 0)
@@ -347,12 +386,14 @@ public class BTree
 		}
 	}
 
-	public void Delete (int key)
+	synchronized public void Delete (int key) throws InterruptedException
 	{
 		Node x = Search(root, key);
+		rootLock.acquire();
 		if (x == null)
 			return;
-
+		
 		Remove(root,key);
+		rootLock.release();
 	}
 }
